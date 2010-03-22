@@ -329,9 +329,12 @@ When the callback is invoked, it will be invoked with the following input parame
 
 # Support
 
-http://forums.movabletype.org/codesixapartcom/project-support/
+Please submit bug reports to our bug tracking system:
 
-# Info
+* Via the web: https://endevver.lighthouseapp.com/projects/42884-config-assistant/tickets
+* Via email: ticket+endevver.42884-wbbkz3cf@lighthouseapp.com
+
+# Licensing
 
 This plugin is not necessary in Melody, as this is core component of that platform.
 
