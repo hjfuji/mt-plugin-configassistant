@@ -11,11 +11,19 @@ sub plugin {
 sub init_app {
     my $plugin = shift;
     my ($app) = @_;
+
+    require Sub::Install;
+    Sub::Install::reinstall_sub( {
+        code => \&needs_upgrade,
+        into => 'MT::Component',
+        as   => 'needs_upgrade'                 
+    });
+
     return if $app->id eq 'wizard';
     init_options($app);
     my $r = $plugin->registry;
     $r->{tags} = sub { load_tags( $app, $plugin ) };
-    
+
     # Static files only get copied during an upgrade.
     if ($app->id eq 'upgrade') {
         # Because no schema version is set, the upgrade process doesn't run
@@ -25,7 +33,7 @@ sub init_app {
         # runs it sees it and will run the upgrade_function.
         # If this isn't the upgrade screen, just quit.
         my $cfg = MT->config('PluginSchemaVersion');
-        if ( $cfg->{$plugin->id} == '' ) {
+        if ( !$cfg->{$plugin->id} || $cfg->{$plugin->id} eq '' ) {
             # There is no schema version set. Set one!
             $cfg->{$plugin->id} = '0.1';
         }
@@ -276,7 +284,7 @@ sub load_tags {
                 $_[0]->stash( 'default',   $dir      );
             };
             # Create the plugin-specific static web path tag, such as "ConfigAssistantStaticWebPath."
-            my $tag = $obj->key . 'StaticWebPath';
+            $tag = $obj->key . 'StaticWebPath';
             my $url = $app->config('StaticWebPath').'/support/plugins/'.$obj->key.'/';
             $tags->{function}->{$tag} = sub {
                 $_[0]->stash( 'field',     $tag      );
@@ -304,7 +312,7 @@ sub runner {
     die $plugin->translate( "Failed to find [_1]::[_2]", $class, $method );
 }
 
-sub MT::Component::needs_upgrade {
+sub needs_upgrade {
     # We need to override MT::Component::needs_upgrade because that only 
     # checks for schema_version, because now we also want to check for 
     # static_version.
