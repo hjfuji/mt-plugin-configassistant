@@ -256,7 +256,6 @@ sub setup_theme {
 
                 my $field_id = $ts_id . '_' . $optname;
                 if ( $types->{ $field->{'type'} } ) {
-                    my $value;
                     my $value = delete $cfg_obj->{$field_id};
                     my $out;
                     $field->{fieldset} = '__global' unless defined $field->{fieldset};
