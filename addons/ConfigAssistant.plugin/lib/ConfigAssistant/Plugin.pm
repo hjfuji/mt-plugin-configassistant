@@ -65,6 +65,7 @@ sub theme_options {
 
     $param ||= {};
 
+    return $app->return_to_dashboard( redirect => 1 ) if (!$blog);
     my $ts        = $blog->template_set;
     my $plugin    = find_theme_plugin($ts);
     my $cfg       = $app->registry('template_sets')->{$ts}->{options};
@@ -94,7 +95,7 @@ sub theme_options {
     my $ctx = MT::Template::Context->new();
 
     $fieldsets->{__global} = {
-        label => sub { "Global Options"; }
+        label => sub { MT->component('ConfigAssistant')->translate("Global Options"); }
     };
 
     # this is a localized stash for field HTML
@@ -136,7 +137,7 @@ sub theme_options {
             $out .= "    </div>\n";
             $out .= "    <div class=\"field-content\">\n";
             if ( $field->{hint} ) {
-                $out .= "       <div>" . $field->{hint} . "</div>\n";
+                $out .= "       <div>" . $plugin->translate($field->{hint}) . "</div>\n";
             }
             $out .= "    </div>\n";
             $out .= "  </div>\n";
@@ -149,7 +150,7 @@ sub theme_options {
             my $out;
             $field->{fieldset} = '__global' unless defined $field->{fieldset};
             my $show_label =
-              defined $field->{show_label} ? $field->{show_label} : 1;
+              defined $field->{show_label} ? &{$field->{show_label}} : 1;
             my $label = $field->{label} ne '' ? &{$field->{label}} : '';
             my $required = $field->{required} ? 'required' : '';
             if ($required) {
@@ -161,26 +162,23 @@ sub theme_options {
                 # Append the required flag.
                 $label .= ' <span class="required-flag">*</span>';
             }
-            $out .=
-                '  <div id="field-'
-              . $field_id
-              . '" class="field field-left-label pkg field-type-'
-              . $field->{type} . ' ' . $required . '">' . "\n";
+
+            $out .= "  <div id=\"field-$field_id\" class=\"field"
+                . ( $show_label == 1 ? " field-left-label" : "" )
+                . ' pkg field-type-'
+                . $field->{type} . ' ' . $required . '">' . "\n";
             $out .= "    <div class=\"field-header\">\n";
-            $out .=
-                "      <label for=\"$field_id\">"
-              . $label
-              . "</label>\n"
-              if $show_label;
+            $out .= "      <label for=\"$field_id\">$label</label>\n"
+                if $show_label;
             $out .= "    </div>\n";
             $out .= "    <div class=\"field-content\">\n";
             my $hdlr =
-              MT->handler_to_coderef( $types->{ $field->{'type'} }->{handler} );
+                MT->handler_to_coderef( $types->{ $field->{'type'} }->{handler} );
             $out .= $hdlr->( $app, $ctx, $field_id, $field, $value );
 
             if ( $field->{hint} ) {
                 $out .=
-                  "      <div class=\"hint\">" . $field->{hint} . "</div>\n";
+                  "      <div class=\"hint\">" . $plugin->translate($field->{hint}) . "</div>\n";
             }
             $out .= "    </div>\n";
             $out .= "  </div>\n";
@@ -290,7 +288,7 @@ sub save_config {
             $param->{$_} = \@vals;
         } else {
             $param->{$_} = $vals[0];
-    }
+        }
     }
     if ( $profile && $profile->{object} ) {
         my $plugin = $profile->{object};
@@ -319,7 +317,7 @@ sub save_config {
                 }
             }
             if ($opt->{type} eq 'file') {
-                my $result = process_file_upload( $app, $var, 'support', $opt->{destination} );
+                my $result = process_file_upload( $app, $var, $opt->{upload_to} || 'blog', $opt->{destination} );
                 if ( $result->{status} == ConfigAssistant::Util::ERROR() ) {
                     return $app->error(
                         "Error uploading file: " . $result->{message} );
@@ -407,6 +405,8 @@ sub type_text {
 
 sub type_file {
     my $app = shift;
+    my $ts        = $app->blog->template_set;
+    my $plugin    = MT->component('ConfigAssistant');
     my ( $ctx, $field_id, $field, $value ) = @_;
     my $html = "";
     if ($value) {
@@ -415,7 +415,7 @@ sub type_file {
         my $asset_url = $asset->url;
         if ( $mtversion >= 5 ) { $asset_url =~ s/support\/support|support\\support/support/; }
         if ($asset) {
-            $html .= "<p>".($asset->label ? $asset->label : $asset->file_name)." <a target=\"_new\" href=\"".$asset_url."\">view</a></p>";
+            $html .= "<p>".($asset->label ? $asset->label : $asset->file_name)." <a target=\"_new\" href=\"".$asset_url."\">" . $plugin->translate('view') . "</a></p>";
         } else {
             $html .= "<p>File not found.</p>";
         }
@@ -426,29 +426,34 @@ sub type_file {
 
 sub type_colorpicker {
     my $app = shift;
+    my $mtversion = substr(MT->version_number, 0, 3);
+    my $jq = ($mtversion >= 5) ? 'jQuery' : '$';
     my ( $ctx, $field_id, $field, $value ) = @_;
     return "      <div id=\"$field_id-colorpicker\" class=\"colorpicker-container\"><div style=\"background-color: $value\"></div></div><input type=\"hidden\" id=\"$field_id\" name=\"$field_id\" value=\""
       . encode_html( $value,
         1 )    # The additional "1" will escape HTML entities properly
-      . "\" />\n<script type=\"text/javascript\">\$('#'+'$field_id-colorpicker').ColorPicker({
+      . "\" />\n<script type=\"text/javascript\">$jq('#'+'$field_id-colorpicker').ColorPicker({
         color: '$value',
         onShow: function (colpkr) {
-            \$(colpkr).fadeIn(500);
+            $jq(colpkr).fadeIn(500);
             return false;
         },
         onHide: function (colpkr) {
-            \$(colpkr).fadeOut(500);
+            $jq(colpkr).fadeOut(500);
             return false;
         },
         onChange: function (hsb, hex, rgb) {
-            \$('#'+'$field_id-colorpicker div').css('backgroundColor', '#' + hex);
-            \$('#'+'$field_id').val('#' + hex).trigger('change');
+            $jq('#'+'$field_id-colorpicker div').css('backgroundColor', '#' + hex);
+            $jq('#'+'$field_id').val('#' + hex).trigger('change');
         }
     });</script>\n";
 }
 
 sub type_link_group {
     my $app = shift;
+    my $plugin    = MT->component('ConfigAssistant');
+    my $mtversion = substr(MT->version_number, 0, 3);
+    my $jq = ($mtversion >= 5) ? 'jQuery' : '$';
     my ( $ctx, $field_id, $field, $value ) = @_;
     my $static = $app->config->StaticWebPath;
     $value = '"[]"' if (!$value || $value eq '');
@@ -463,26 +468,28 @@ sub type_link_group {
     foreach (@$list) {
         $html .= '<li class="pkg"><a class="link" href="'.$_->{'url'}.'">'.$_->{'label'}.'</a> <a class="remove" href="javascript:void(0);"><img src="'.$static.'/images/icon_close.png" /></a> <a class="edit" href="javascript:void(0);">edit</a></li>';
     }
-    $html .= "<li class=\"last\"><button class=\"add-link\">Add Link</button></li>"
+    $html .= "<li class=\"last\"><button class=\"add-link\">"
+        . $plugin->translate('Add Link')
+        . "</button></li>"
         . "</ul>"
         . "</div>"
         . "<input type=\"hidden\" id=\"$field_id\" name=\"$field_id\" value=\""
         . encode_html( $value, 1 )    # The additional "1" will escape HTML entities properly
         . "\" />\n<script type=\"text/javascript\">\n";
-    $html .= "  \$('#'+'$field_id-link-group button.add-link').click( handle_edit_click );\n";
-    $html .= "  \$('#'+'$field_id-link-group').parents('form').submit( function (){
+    $html .= "  $jq('#'+'$field_id-link-group button.add-link').click( handle_edit_click );\n";
+    $html .= "  $jq('#'+'$field_id-link-group').parents('form').submit( function (){
     var struct = Array();
-    \$(this).find('#'+'$field_id-link-group ul li button').trigger('click');
-    \$(this).find('#'+'$field_id-link-group ul li a.link').each( function(i, e) {
-      var u = \$(this).attr('href');
-      var l = \$(this).html();
+    $jq(this).find('#'+'$field_id-link-group ul li button').trigger('click');
+    $jq(this).find('#'+'$field_id-link-group ul li a.link').each( function(i, e) {
+      var u = $jq(this).attr('href');
+      var l = $jq(this).html();
       struct.push( { 'url': u, 'label': l } );
     });
-    var json = \$.toJSON(struct);
-    \$('#'+'$field_id').val( json );
+    var json = $jq.toJSON(struct);
+    $jq('#'+'$field_id').val( json );
   });
-  \$('#'+'$field_id-link-group ul li a.remove').click( handle_delete_click );
-  \$('#'+'$field_id-link-group ul li a.edit').click( handle_edit_click );
+  $jq('#'+'$field_id-link-group ul li a.remove').click( handle_delete_click );
+  $jq('#'+'$field_id-link-group ul li a.edit').click( handle_edit_click );
 </script>\n";
     return $html;
 }
@@ -509,6 +516,8 @@ sub type_page {
 
 sub type_entry {
     my $app = shift;
+    my $mtversion = substr(MT->version_number, 0, 3);
+    my $jq = ($mtversion >= 5) ? 'jQuery' : '$';
     my ( $ctx, $field_id, $field, $value ) = @_;
     my $out;
     my $obj_class  = $ctx->stash('object_class') || 'entry';
@@ -519,9 +528,9 @@ sub type_entry {
         $out .= <<EOH;
     <script type="text/javascript">
         function insertCustomFieldEntry(html, val, id) {
-            \$('#'+id).val(val);
+            $jq('#'+id).val(val);
             try {
-                \$('#'+id+'_preview').html(html);
+                $jq('#'+id+'_preview').html(html);
             } catch(e) {
                 log.error(e);
             };
@@ -531,7 +540,6 @@ EOH
         $ctx->var( 'entry_chooser_js', 1 );
     }
     my $label = MT->model($obj_class)->class_label;
-    my $mtversion  = substr(MT->version_number, 0, 3);
     if ($mtversion >= 5) {
         $out .= <<EOH;
 <div class="pkg">
@@ -670,14 +678,23 @@ sub type_radio {
     my ( $ctx, $field_id, $field, $value ) = @_;
     my $out;
     my @values = split( ",", $field->{values} );
+    my $ts        = $app->blog->template_set;
+    my $plugin    = find_theme_plugin($ts);
     $out .= "      <ul>\n";
     foreach (@values) {
+        # $el_id ("element ID") is used as a unique identifier so that the
+        # label can be clickable to select the radio button.
+        my $el_id = $field_id . '_' . $_;
+        my $label = $plugin->translate($_);
         $out .=
-            "        <li><input type=\"radio\" name=\"$field_id\" value=\"$_\""
-          . ( $value eq $_ ? " checked=\"checked\"" : "" )
-          . " class=\"rb\" />"
-          . $_
-          . "</li>\n";
+            "        <li><input type=\"radio\" name=\"$field_id\""
+            . " id=\"$el_id\" value=\"$_\""
+            . ( $value eq $_ ? " checked=\"checked\"" : "" )
+            . " class=\"rb\" />"
+            # Add a space between the input field and the label so that the
+            # label text isn't bumped up right next to the radio button.
+            . " <label for=\"$el_id\">$label</label>"
+            . "</li>\n";
     }
     $out .= "      </ul>\n";
     return $out;
@@ -686,11 +703,25 @@ sub type_radio {
 sub type_radio_image {
     my $app = shift;
     my ( $ctx, $field_id, $field, $value ) = @_;
+    my $ts        = $app->blog->template_set;
+    my $plugin    = find_theme_plugin($ts);
     my $out;
     my $static = $app->config->StaticWebPath;
     $out .= "      <ul class=\"pkg\">\n";
-    while ( $field->{values} =~ /\"([^\"]*)\":\"([^\"]*)\",?/g ) {
-        my ($url,$label) = ($1,$2);
+    my @values;
+    if (ref $field->{values} eq 'ARRAY') {
+        for my $value (@{$field->{values}}) {
+            push @values, $value;
+        }
+    }
+    else {
+        while ( $field->{values} =~ /\"([^\"]*)\":\"([^\"]*)\",?/g ) {
+            push @values, { url => $1, label => $2 };
+        }
+    }
+    for my $v (@values) {
+        my ($url, $label) = ($v->{url}, $v->{label});
+        my $label_local = $plugin->translate($label);
         my $base;
         if ($url =~ /^http/) {
             $base = '';
@@ -698,16 +729,19 @@ sub type_radio_image {
             $base = $static;
         }
         $out .=
-            "        <li><input type=\"radio\" name=\"$field_id\" value=\"$label\""
+            "        <li"
+          . ( $value eq $label ? " class=\"selected\"" : "" )
+          . "><input type=\"radio\" name=\"$field_id\" value=\"$label\""
           . ( $value eq $label ? " checked=\"checked\"" : "" )
           . " class=\"rb\" />"
           . "<img src=\""
           . $base
           . $url
-          . "\" /><br />$label"
+          . "\" /><br />$label_local"
           . "</li>\n";
     }
     $out .= "      </ul>\n";
+    $out .= '      <div style="clear : both;"></div>' . "\n";
     return $out;
 }
 
@@ -716,18 +750,21 @@ sub type_select {
     my ( $ctx, $field_id, $field, $value ) = @_;
     my $out;
     my @values = split( ",", $field->{values} );
+    my $ts        = $app->blog->template_set;
+    my $plugin    = find_theme_plugin($ts);
     $out .= "      <select name=\"$field_id\">\n";
     foreach my $label (@values) {
         my $v;
         if ($label =~ /\"([^\"]+)\":\"([^\"]+)\"/) {
-            $label = $1;
+            $label = $plugin->translate($1);
             $v = $2;
         } else {
             $v = $label;
+            $label = $plugin->translate($label);
         }
         $out .=
             "        <option value=\"$v\""
-          . ( $value eq $label ? " selected" : "" )
+          . ( $value eq $v ? " selected" : "" )
           . ">$label</option>\n";
     }
     $out .= "      </select>\n";
@@ -772,25 +809,34 @@ sub type_checkbox {
     if ($field->{values}) {
         my $delimiter = $field->{delimiter} || ',';
         my @values = split( $delimiter, $field->{values} );
+        my $ts        = $app->blog->template_set;
+        my $plugin    = find_theme_plugin($ts);
         $out .= "      <ul>\n";
         foreach (@values) {
             my $checked = 0;
+            my $label = $plugin->translate($_);
             if (ref($value) eq 'ARRAY') {
                 $checked = in_array($value,$_);
             } else {
                 $checked = $value eq $_;
             }
+            # $el_id ("element ID") is used as a unique identifier so that the
+            # label can be clickable to select the radio button.
+            my $el_id = $field_id . '_' . $_;
             $out .=
-                "        <li><input type=\"checkbox\" name=\"$field_id\" value=\"$_\""
+                "        <li><input type=\"checkbox\" name=\"$field_id\" "
+                . "id=\"$el_id\" value=\"$_\""
                 . ( $checked ? " checked=\"checked\"" : "" )
-                . " class=\"rb\" /> "
-                . $_
+                . " class=\"rb\" />"
+                # Add a space between the input field and the label so that the
+                # label text isn't bumped up right next to the radio button.
+                . " <label for=\"$el_id\">$label</label>"
                 . "</li>\n";
         }
         $out .= "      </ul>\n";
     } else {
-    $out .= "      <input type=\"checkbox\" name=\"$field_id\" value=\"1\" "
-      . ( $value ? "checked " : "" ) . "/>\n";
+        $out .= "      <input type=\"checkbox\" name=\"$field_id\" value=\"1\" "
+            . ( $value ? "checked " : "" ) . "/>\n";
     }
     return $out;
 }
@@ -1008,7 +1054,7 @@ sub plugin_options {
     my $ctx = MT::Template::Context->new();
 
     $fieldsets->{__global} = {
-        label => sub { "Global Options"; }
+        label => sub { $plugin->translate("Global Options"); }
     };
 
     # this is a localized stash for field HTML
@@ -1042,8 +1088,9 @@ sub plugin_options {
             # or retrieved. It just displays a separator and some info.
             my $out;
             my $show_label =
-              defined $field->{show_label} ? $field->{show_label} : 1;
+                defined $field->{show_label} ? %{$field->{show_label}} : 1;
             my $label = $field->{label} ne '' ? &{$field->{label}} : '';
+
             $out .=
                 '  <div id="field-'
               . $field_id
@@ -1066,18 +1113,16 @@ sub plugin_options {
             my $out;
             $field->{fieldset} = '__global' unless defined $field->{fieldset};
             my $show_label =
-              defined $field->{show_label} ? $field->{show_label} : 1;
-            $out .=
-                '  <div id="field-'
-              . $field_id
-              . '" class="field field-left-label pkg field-type-'
-              . $field->{type} . '">' . "\n";
+                defined $field->{show_label} ? %{$field->{show_label}} : 1;
+            my $label = $field->{label} ne '' ? &{$field->{label}} : '';
+
+            $out .= "  <div id=\"field-$field_id\" class=\"field"
+                . ( $show_label == 1 ? " field-left-label" : "" )
+                . ' pkg field-type-'
+                . $field->{type} . '">' . "\n";
             $out .= "    <div class=\"field-header\">\n";
-            $out .=
-                "      <label for=\"$field_id\">"
-              . &{ $field->{label} }
-              . "</label>\n"
-              if $show_label;
+            $out .= "      <label for=\"$field_id\">$label</label>\n"
+                if $show_label;
             $out .= "    </div>\n";
             $out .= "    <div class=\"field-content\">\n";
             my $hdlr =
@@ -1090,6 +1135,7 @@ sub plugin_options {
             }
             $out .= "    </div>\n";
             $out .= "  </div>\n";
+
             my $fs = $field->{fieldset};
             push @{ $fields->{$fs} }, $out;
         }
@@ -1186,7 +1232,7 @@ sub entry_search_api_prep {
 sub list_entry_mini {
     my $app = shift;
 
-    my $blog_id = $app->param('blog_id') || 0;
+    my $blog_id  = $app->param('blog_id') || 0;
     my $obj_type = $app->param('class') || 'entry';
     my $pkg      = $app->model($obj_type) or return "Invalid request: unknown class $obj_type";
 
@@ -1284,6 +1330,11 @@ sub xfrm_cfg_plugin_param {
 sub xfrm_cfg_plugin {
     my ( $cb, $app, $tmpl ) = @_;
     my $mtversion  = substr(MT->version_number, 0, 3);
+    my $plugin = MT->component('ConfigAssistant');
+    my $label_msg = $plugin->translate('Label');
+    my $url_msg = $plugin->translate('URL');
+    my $save_msg = $plugin->translate('Save');
+    my $edit_msg = $plugin->translate('edit');
     my $slug1 = <<END_TMPL;
 
 <form enctype="multipart/form-data" method="post" action="<mt:var name="script_url">" id="plugin-<mt:var name="plugin_id">-form">
@@ -1305,12 +1356,11 @@ sub xfrm_cfg_plugin {
       <button
         mt:mode="save_plugin_config"
         type="submit"
-        class="action primary-button"><__trans phrase="Save Changes"></button>
+        class="primary-button"><__trans phrase="Save Changes"></button>
 <mt:if name="plugin_settings_id">
       <button
         onclick="resetPlugin(getByID('plugin-<mt:var name="plugin_id">-form')); return false"
-        type="submit"
-        class="action"><__trans phrase="Reset to Defaults"></button>
+        type="submit"><__trans phrase="Reset to Defaults"></button>
 </mt:if>
     </div>
   </div>
@@ -1322,6 +1372,14 @@ END_TMPL
 <mt:setvarblock name="html_head" append="1">
   <link rel="stylesheet" href="<mt:PluginStaticWebPath component="configassistant">css/app.css" type="text/css" />
   <script src="<mt:StaticWebPath>jquery/jquery.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    var ConfigAssistantMsg = {
+        label_msg : '$label_msg',
+        url_msg : '$url_msg',
+        save_msg : '$save_msg',
+        edit_msg : '$edit_msg'
+    };
+  </script>
   <script src="<mt:PluginStaticWebPath component="configassistant">js/app.js" type="text/javascript"></script>
 </mt:setvarblock>
 END_TMPL
@@ -1329,7 +1387,15 @@ END_TMPL
         $slug2 = <<END_TMPL;
 <mt:setvarblock name="html_head" append="1">
   <link rel="stylesheet" href="<mt:PluginStaticWebPath component="configassistant">css/app.css" type="text/css" />
-  <script src="<mt:PluginStaticWebPath component="configassistant">js/app.js" type="text/javascript"></script>
+  <script type="text/javascript">
+    var ConfigAssistantMsg = {
+        label_msg : '$label_msg',
+        url_msg : '$url_msg',
+        save_msg : '$save_msg',
+        edit_msg : '$edit_msg'
+    };
+  </script>
+  <script src="<mt:PluginStaticWebPath component="configassistant">js/app5.js" type="text/javascript"></script>
 </mt:setvarblock>
 END_TMPL
     }

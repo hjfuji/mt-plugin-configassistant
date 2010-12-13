@@ -47,7 +47,27 @@
 </mt:if>
   <link rel="stylesheet" href="<$mt:PluginStaticWebPath component="configassistant"$>colorpicker/css/colorpicker.css" type="text/css" />
   <script src="<$mt:StaticWebPath$>jquery/jquery.js" type="text/javascript"></script>
+<mt:if name="mtversion" ge="5.0">
+  <script type="text/javascript">
+    var ConfigAssistantMsg = {
+        label_msg : '<__trans phrase="Label">',
+        url_msg : '<__trans phrase="URL">',
+        save_msg : '<__trans phrase="Save">',
+        edit_msg : '<__trans phrase="edit">'
+    };
+  </script>
+  <script src="<$mt:PluginStaticWebPath component="configassistant"$>js/app5.js" type="text/javascript"></script>
+<mt:else>
+  <script type="text/javascript">
+    var ConfigAssistantMsg = {
+        label_msg : '<__trans phrase="Label">',
+        url_msg : '<__trans phrase="URL">',
+        save_msg : '<__trans phrase="Save">',
+        edit_msg : '<__trans phrase="edit">'
+    };
+  </script>
   <script src="<$mt:PluginStaticWebPath component="configassistant"$>js/app.js" type="text/javascript"></script>
+</mt:if>
   <script src="<$mt:PluginStaticWebPath component="configassistant"$>colorpicker/js/colorpicker.js" type="text/javascript"></script>
   <script src="<$mt:PluginStaticWebPath component="configassistant"$>js/jquery.json-2.2.min.js" type="text/javascript"></script>
 <mt:if name="mtversion" ge="5.0">

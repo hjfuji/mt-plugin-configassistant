@@ -40,7 +40,9 @@
         panel.parent = dlg;
         dlg.open({}, dialogClose);
     }
+<mt:if name="mtversion" lt="5">
     TC.attachLoadEvent( init );
+</mt:if>
     /* ]]> */
     </script>
 </mt:setvarblock>
@@ -188,6 +190,12 @@
         </div>
     </div>
     </mt:unless>
+</mt:if>
+
+<mt:if name="mtversion" ge="5">
+<mt:setvarblock name="jq_js_include" append="1">
+    init();
+</mt:setvarblock>
 </mt:if>
 
 <mt:unless name="json">

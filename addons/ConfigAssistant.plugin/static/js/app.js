@@ -1,7 +1,15 @@
 $(document).ready( function() {
-  var active = $('#content-nav ul li.active a').attr('id');
-  $('#' + active + '-content').show();
-  $('h2#page-title span').html( $('#content-nav ul li.active a b').html() );
+  var active_elm = $('#content-nav ul li.active a');
+  var active;
+  if (active_elm) {
+    active = active_elm.attr('id');
+    $('#' + active + '-content').show();
+  }
+  else {
+    return;
+  }
+//  var active = $('#content-nav ul li.active a').attr('id');
+//  $('h2#page-title span').html( $('#content-nav ul li.active a b').html() );
   $('#fieldsets input, #fieldsets select, #fieldsets textarea').change( function () {
     var changed = $(this).parent().parent().parent().attr('id');
     $('#content-nav ul li.'+changed).addClass('changed');

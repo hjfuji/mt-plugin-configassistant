@@ -4,6 +4,7 @@ use strict;
 use ConfigAssistant::Util qw( find_theme_plugin find_option_plugin );
 use File::Spec;
 use Sub::Install;
+use MT::Theme;
 
 sub plugin {
     return MT->component('ConfigAssistant');
@@ -12,7 +13,25 @@ sub plugin {
 sub init_app {
     my $plugin = shift;
     my ($app) = @_;
+
+    my $mtversion = substr(MT->version_number, 0, 3);
+    if ($mtversion >= 5) {
+        Sub::Install::reinstall_sub( {
+            code => \&_load_pseudo_theme_from_template_set,
+            into => 'MT::Theme',
+            as   => '_load_pseudo_theme_from_template_set'
+        });
+    }
     return if $app->id eq 'wizard';
+
+    # Disable the AutoPrefs plugin if it's installed. (AutoPrefs has been
+    # merged with Config Assistant, so is not needed anymore.)
+    my $switch = MT->config('PluginSwitch') || {};
+    unless ( $switch->{'AutoPrefs'} eq '0' ) {
+        $switch->{'AutoPrefs'} = 0;
+        MT->config('PluginSwitch', $switch, 1);
+        MT->config->save_config();
+    }
 
     init_options($app);
     my $r = $plugin->registry;
@@ -106,7 +125,7 @@ sub init_options {
             }
         }    # end foreach (@sets)
 
-         # Now register settings for each plugin option, and register a plugin_config_form
+        # Now register settings for each plugin option, and register a plugin_config_form
         my @options = keys %{ $r->{'options'} };
         foreach my $opt (@options) {
             next if ( $opt eq 'fieldsets' );
@@ -416,6 +435,13 @@ sub update_menus {
                     return 1 if $app->registry('template_sets')->{$ts}->{options};
                     return 0;
                 },
+            },
+            'prefs:ca_prefs' => {
+                label      => 'Chooser',
+                order      => 1,
+                mode       => 'ca_prefs_chooser',
+                view       => 'blog',
+                permission => 'administer',
             }
         };
     } else {
@@ -435,6 +461,13 @@ sub update_menus {
                     return 1 if $app->registry('template_sets')->{$ts}->{options};
                     return 0;
                 },
+            },
+            'prefs:ca_prefs' => {
+                label      => 'Chooser',
+                order      => 1,
+                mode       => 'ca_prefs_chooser',
+                view       => 'blog',
+                permission => 'administer',
             }
         };
     }
@@ -479,6 +512,63 @@ sub needs_upgrade {
         }
     }
     0;
+}
+
+sub _load_pseudo_theme_from_template_set {
+    my $pkg = shift;
+    my ($id) = @_;
+    $id =~ s/^theme_//;
+    my $sets = MT->registry("template_sets")
+        or return;
+    my $set = $sets->{$id}
+        or return;
+    my $plugin = $set->{plugin} || undef;
+    my $label = $set->{label}
+                   || ( $plugin && $plugin->registry('name') )
+                   || $id;
+    my $props = {
+        id          => "theme_$id",
+        type        => 'template_set',
+        author_name => $plugin ? $plugin->registry('author_name') : '',
+        author_link => $plugin ? $plugin->registry('author_link') : '',
+        version     => $plugin ? $plugin->registry('version') : '',
+        __plugin    => $plugin,
+        class       => 'blog',
+        path        => $plugin ? $plugin->path : '',
+        base_css    => $set->{base_css},
+        elements => {
+            template_set => {
+                component => 'core',
+                importer  => 'template_set',
+                name      => 'template set',
+                data      => $id,
+            },
+        },
+    };
+
+    map { $props->{$_} = $set->{mt5_theme_settings}->{$_} } keys %{$set->{mt5_theme_settings}};
+    if (!$props->{thumbnail_file} && $set->{preview}) {
+        $props->{thumbnail_file} = 'static/' . $set->{preview};
+    }
+    if (!$props->{thumbnail_file_small} && $set->{preview}) {
+        $props->{thumbnail_file_small} = 'static/' . $set->{thumbnail};
+    }
+    $props->{author_name} = $plugin->translate_templatized($props->{author_name}) if $plugin;
+    my $description = $plugin
+                    ? $plugin->translate($set->{description})
+                    : $set->{description};
+    my $reg = {
+        id           => "theme_$id",
+        version      => $plugin ? $plugin->registry('version')     : '',
+        l10n_class   => $plugin ? $plugin->registry('l10n_class') : 'MT::L10N',
+        l10n_lexicon => $plugin ? $plugin->registry('l10n_lexicon') : undef,
+        label        => sub { MT->translate( '[_1]', $label ) },
+        description  => $description,
+        class        => 'blog',
+    };
+    my $class = $pkg->new( $props );
+    $class->registry( $reg );
+    return $class;
 }
 
 1;
